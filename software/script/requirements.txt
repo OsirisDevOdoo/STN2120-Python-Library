@@ -1,0 +1,2 @@
+pyserial
+stn2120-pck

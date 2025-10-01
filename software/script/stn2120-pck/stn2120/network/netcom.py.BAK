@@ -1,0 +1,138 @@
+
+from datetime import datetime
+import socket
+import threading
+import re
+from queue import Queue
+
+
+import logging
+logger = logging.getLogger(__name__)
+
+HOST_NAME = socket.gethostname()  #'10.117.246.138'
+HOST      = socket.gethostbyname(HOST_NAME)
+PORT      = 5555
+
+class socket_clients():
+    """
+    """
+
+    def __init__(self, connection_data):
+        """
+        """
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        #self.client.connect('192.168.1.82', PORT)
+        self.client.connect(connection_data)
+        logger.info("==  socket_client, connected ======" )
+
+
+    def send_data(self, data):
+        """
+        """
+        #cmd += b"\r\n" # terminate
+        #logger.info("==  socket_client, client %s:%s ======" % (self.client.getpeername(),self.client.getsockname()) )
+        print("sd",data)
+        self.client.send(data)
+        print("ok")
+
+
+
+    def get_data(self):
+        """   """
+        return  self.client.recv(1024)
+
+
+    def close_client(self):
+        """ """
+        self.client.close()
+
+class ThreadedServer(object):
+    """
+      from stn2120.network import netcom
+      srv = netcom.ThreadedServer('192.168.1.82', 5555)
+      srv.listen()
+
+    """
+    def __init__(self, host=None, port=None):
+        if host:
+            self.host = host
+            self.port = port
+        else:
+            self.host = HOST
+            self.port = PORT
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.bind((self.host, self.port))
+        self.clients = {}
+        self.dataQueue = Queue()
+
+    def listen(self):
+        #print("ThreadedServer listening", self.sock)
+        self.sock.listen()
+        while True:
+            client, address = self.sock.accept()
+            print ("address", address)
+
+
+            #if self.clients['client_1'] == '':
+            #    self.clients['client_1'] = client
+            #    client.send(b'client_1')
+            #else:
+            #    self.clients['client_2'] = client
+            #    client.send(b'client_2')
+            #
+            #self.clients[client.getpeername()] = client
+            client.settimeout(600)
+
+            threading.Thread(target = self.listenToClient,args = (client,address)).start()
+            threading.Thread(target=self.processData, args=()).start()
+
+
+    def processData (self):
+        """   """
+        regex_role = '^(role=){1}(.*)$'
+        regex_frame = '^(frame:){1}([A-F0-9]{3}){1}(.*)$'
+
+        while True:
+            try:
+                print("process dataQueue:", self.dataQueue.get())
+            except:
+                pass
+
+    def listenToClient(self, client, address):
+        """         """
+        ###->regex_role = '^(role=){1}(.*)$'
+        # b'frame:412 10 00 00 06 00 FF 00 00 \r\n'
+        ###->regex_frame = '^(frame:){1}([A-F0-9]{3}){1}(.*)$'
+        #regex_frame = '^(frame:){1}([A-F0-9]{3}){1}(.*)\\r\\n$'
+        size = 102
+        while True:
+            try:
+                data_in = client.recv(size)
+                if data_in:
+                    self.dataQueue.put(data_in)
+                ###->data = client.recv(size)
+                ###->print("sF0:",data)
+                ###->if data:
+                ###->    data_frame = re.match(regex_frame, data.decode())
+                ###->    if data_frame:
+                ###->        #print("DATA:",data, " decode", data.decode() )
+                ###->        print ("sF-->",data)
+                ###->        self.clients['clt_diag'].send(data)
+                ###->        continue
+                ###->    #print ("server get data ", data)
+                ###->    data_str = re.match(regex_role, data.decode())
+                ###->    #print ("server get data ", data_str)
+
+                ###->    if data_str:
+                ###->        self.clients[data_str.group(2)] = client
+                ###->        data2client = data_str.group(2)
+                ###->        client.send(data2client.encode())
+
+                ###->    if data == b'Get clients dict':
+                ###->        client.send(str(list(self.clients)).encode())
+                ###->else:
+                ###->    raise error('Client disconnected')
+            except:
+                client.close()
+                return False
