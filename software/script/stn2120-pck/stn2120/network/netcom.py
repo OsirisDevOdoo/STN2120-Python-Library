@@ -14,11 +14,26 @@ HOST      = socket.gethostbyname(HOST_NAME)
 PORT      = 5555
 
 class socket_clients():
-    """
+    """Cliente TCP para enviar y recibir tramas CAN encapsuladas.
+
+    Esta clase representa un extremo activo dentro de la topología, encargado
+    de conectarse a un servidor TCP (habitualmente la instancia
+    :class:`ThreadedServer`) y mantener una sesión orientada a bytes. Las
+    tramas CAN deben enviarse como payloads binarios previamente formateados,
+    idealmente siguiendo la convención ``b'frame:<ID> <DATA>\r\n'`` utilizada
+    por el firmware STN2120.
     """
 
     def __init__(self, connection_data):
-        """
+        """Establece la conexión con el servidor especificado.
+
+        Args:
+            connection_data (tuple[str, int]): Tupla ``(host, puerto)`` del
+                servidor TCP al que se desea conectar el cliente.
+
+        Side Effects:
+            - Crea y abre un socket TCP/IP.
+            - Envía un mensaje de saludo al servidor confirmando la conexión.
         """
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         #self.client.connect('192.168.1.82', PORT)
@@ -29,7 +44,16 @@ class socket_clients():
 
 
     def send_data(self, data, frame_length):
-        """
+        """Envía una trama CAN hacia el servidor TCP.
+
+        Args:
+            data (bytes): Payload binario que contiene la trama CAN formateada.
+            frame_length (int): Longitud esperada de la trama. El método
+                intentará enviar el payload completo repitiendo ``send`` hasta
+                alcanzar este tamaño.
+
+        Side Effects:
+            Registra información de depuración en los logs.
         """
         #cmd += b"\r\n" # terminate
         #logger.info("==  socket_client, client %s:%s ======" % (self.client.getpeername(),self.client.getsockname()) )
@@ -50,7 +74,12 @@ class socket_clients():
 
 
     def get_data(self):
-        """   """
+        """Recupera datos entrantes desde el servidor TCP.
+
+        Returns:
+            bytes | None: Trama recibida o ``None`` si no se pudo leer ningún
+            dato.
+        """
         try:
             data = self.client.recv(1024)
             return data
@@ -60,17 +89,18 @@ class socket_clients():
 
 
     def close_client(self):
-        """ """
+        """Cierra la conexión TCP mantenida por el cliente."""
         self.client.close()
 
 
 
 class ThreadedServer(object):
-    """
-      from stn2120.network import netcom
-      srv = netcom.ThreadedServer('192.168.1.82', 5555)
-      srv.listen()
+    """Servidor TCP que coordina múltiples clientes CAN.
 
+    Esta clase actúa como hub dentro de la topología: acepta conexiones de
+    varios clientes (diagnóstico, emulador de vehículo, etc.) y distribuye las
+    tramas CAN recibidas. Resulta útil para bancos de pruebas donde se requiere
+    inyectar o monitorizar mensajes desde distintos roles.
     """
     def __init__(self, host=None, port=None):
         if host:
@@ -90,8 +120,7 @@ class ThreadedServer(object):
 
 
     def listen(self):
-        """
-        """
+        """Espera una conexión entrante y establece la sesión principal."""
         self.sock.listen(5)
         self.client, self.address = self.sock.accept()
         print ("address", self.address)
@@ -129,7 +158,23 @@ class ThreadedServer(object):
 
 
     def listenToClient(self, client, address):
-        """         """
+        """Gestiona el intercambio de tramas con un cliente específico.
+
+        Args:
+            client (socket.socket): Socket ya aceptado mediante ``accept``.
+            address (tuple[str, int]): Dirección IP y puerto del cliente
+                asociado.
+
+        Returns:
+            bool: ``False`` cuando el cliente cierra la conexión o se produce
+            un error; en caso contrario el método se mantiene en bucle.
+
+        Notes:
+            Se espera que las tramas entrantes respeten la convención
+            ``frame:<ID> <DATA>\r\n``. La lógica de routing entre clientes se
+            encuentra comentada y puede adaptarse a las necesidades del banco
+            de pruebas.
+        """
         ###->regex_role = '^(role=){1}(.*)$'
         # b'frame:412 10 00 00 06 00 FF 00 00 \r\n'
         ###->regex_frame = '^(frame:){1}([A-F0-9]{3}){1}(.*)$'
